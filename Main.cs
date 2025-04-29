@@ -5,6 +5,8 @@ using UnityEngine;
 using TMPro;
 using Photon.Pun;
 using System;
+using OculusSampleFramework;
+using UnityEngine.UIElements;
 
 namespace GorillaStats
 {
@@ -23,7 +25,6 @@ namespace GorillaStats
 
         private int playerCount;
 
-
         void Start()
         {
             GorillaTagger.OnPlayerSpawned(Init);
@@ -34,10 +35,10 @@ namespace GorillaStats
             bundle = LoadAssetBundle("GorillaStats.watch.watch"); // Why did I make this the path lol
             Watch = Instantiate(bundle.LoadAsset<GameObject>("Watch"));
 
-            Watch.transform.SetParent(GorillaLocomotion.GTPlayer.Instance.rightControllerTransform, false);
-            Watch.transform.localPosition = Vector3.zero;
-            Watch.transform.localRotation = Quaternion.Euler(0f, 90f, 90f);
-            Watch.transform.localScale = new Vector3(0.015f, 0.015f, 0.015f);
+            Watch.transform.SetParent(GorillaLocomotion.GTPlayer.Instance.rightControllerTransform.transform);
+            Watch.transform.localPosition = new Vector3(-0.03f, 0f, -0.07f);
+            Watch.transform.localRotation = Quaternion.Euler(325f, 0f, 90f);
+            Watch.transform.localScale = new Vector3(0.02f, 0.02f, 0.02f);
 
             watchText = Watch.GetComponentInChildren<TextMeshPro>();
 
@@ -76,6 +77,7 @@ namespace GorillaStats
             {
                 Debug.LogError($"[GorillaStats]: Error updating watch text: {e}, unity I will do bad things to you");
             }
+
         }
 
         private string GetFPSColor(float fps)

@@ -7,6 +7,7 @@ using Photon.Pun;
 using System;
 using OculusSampleFramework;
 using UnityEngine.UIElements;
+using UnityEngine.Animations.Rigging;
 
 namespace GorillaStats
 {
@@ -14,8 +15,8 @@ namespace GorillaStats
     public class Main : BaseUnityPlugin
     {
         public static AssetBundle bundle;
-        private GameObject Watch;
-        private TextMeshPro watchText;
+        public GameObject Watch;
+        public TextMeshPro watchText;
 
         private float deltaTime;
         public static string ping;

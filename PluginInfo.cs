@@ -6,6 +6,6 @@
     {
         public const string GUID = "arielthemonke.gorillastats";
         public const string ProjectName = "GorillaStats";
-        public const string Version = "1.0.1";
+        public const string Version = "1.0.2";
     }
 }

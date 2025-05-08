@@ -42,6 +42,8 @@ namespace GorillaStats
             Watch.transform.localScale = new Vector3(0.02f, 0.02f, 0.02f);
 
             watchText = Watch.GetComponentInChildren<TextMeshPro>();
+            watchText.font = GorillaTagger.Instance.offlineVRRig.playerText1.font; // thanks hansolo1000falcon!
+            watchText.text = "Loading..."; 
 
             lastPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
         }
@@ -67,7 +69,7 @@ namespace GorillaStats
             Vector3 currentPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
             playerSpeed = Vector3.Distance(currentPosition, lastPosition) / Time.deltaTime;
             lastPosition = currentPosition;
-
+            
             try
             {
                 string fpsColor = GetFPSColor(fps);
@@ -102,7 +104,15 @@ namespace GorillaStats
             }
         }
 
-
+        private void OnGUI()
+        {
+            GUI.Box(new Rect(10, 10, 100, 200), "==GorillaStats==");
+            GUI.Label(new Rect(10, 30, 100, 20), "PING: " + ping);
+            GUI.Label(new Rect(10, 50, 100, 20), "PLAYERS: " + playerCount);
+            GUI.Label(new Rect(10, 70, 100, 20), "TIME: " + DateTime.Now.ToString("HH:mm"));
+            GUI.Label(new Rect(10, 90, 100, 20), $"FPS: {Mathf.Round(1f / deltaTime)}");
+            GUI.Label(new Rect(10, 110, 100, 20), $"SPEED: {playerSpeed:F2}");
+        }
 
         public AssetBundle LoadAssetBundle(string path)
         {

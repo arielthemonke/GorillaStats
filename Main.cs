@@ -5,9 +5,9 @@ using UnityEngine;
 using TMPro;
 using Photon.Pun;
 using System;
-using OculusSampleFramework;
-using UnityEngine.UIElements;
-using UnityEngine.Animations.Rigging;
+using System.Linq;
+using System.Collections.Generic;
+using UnityEngine.InputSystem;
 
 namespace GorillaStats
 {
@@ -18,13 +18,12 @@ namespace GorillaStats
         public GameObject Watch;
         public TextMeshPro watchText;
 
-        private float deltaTime;
-        public static string ping;
+        
+        
+        private List<GorillaStatsPlugin> loadedMods = new List<GorillaStatsPlugin>();
+        private bool wasPressed;
 
-        private Vector3 lastPosition;
-        private float playerSpeed;
-
-        private int playerCount;
+        private int CurrentModNumba = -1;
 
         void Start()
         {
@@ -43,76 +42,51 @@ namespace GorillaStats
 
             watchText = Watch.GetComponentInChildren<TextMeshPro>();
             watchText.font = GorillaTagger.Instance.offlineVRRig.playerText1.font; // thanks hansolo1000falcon!
-            watchText.text = "Loading..."; 
+            watchText.text = "Loading...\nPress right primary to continue..."; 
 
-            lastPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
+            LoadDaMods();
         }
 
         void Update()
         {
-            if (Watch == null || watchText == null) return;
-
-            if (PhotonNetwork.InRoom)
+            if (ControllerInputPoller.instance.rightControllerSecondaryButton && !wasPressed || Keyboard.current.lKey.wasPressedThisFrame)
             {
-                ping = PhotonNetwork.GetPing().ToString();
-                playerCount = PhotonNetwork.CurrentRoom.PlayerCount;
-            }
-            else
-            {
-                ping = "N/A";
-                playerCount = 0;
-            }
+                CurrentModNumba++;
+                if (CurrentModNumba > loadedMods.Count - 1)
+                {
+                    CurrentModNumba = -1;
+                }
 
-            deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
-            float fps = 1.0f / deltaTime;
-
-            Vector3 currentPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
-            playerSpeed = Vector3.Distance(currentPosition, lastPosition) / Time.deltaTime;
-            lastPosition = currentPosition;
-            
-            try
-            {
-                string fpsColor = GetFPSColor(fps);
-                string pingColor = GetPingColor(ping);
-                watchText.text = $"<color={fpsColor}>FPS: {Mathf.Round(fps)}</color>\n" + $"<color={pingColor}>PING: {ping}</color>\n" + $"<color=white>SPEED: {playerSpeed:F2}</color>\n" + $"<color=white>TIME: {DateTime.Now:HH:mm:ss}</color>\n" + $"<color=white>PLAYERS: {playerCount}</color>";
+                foreach (var mod in loadedMods) mod.OnDisable();
+                if (CurrentModNumba >= 0)
+                {
+                    loadedMods[CurrentModNumba].OnEnable();
+                }
             }
-            catch (Exception e)
+            wasPressed = ControllerInputPoller.instance.rightControllerSecondaryButton;
+            if (CurrentModNumba >= 0 && CurrentModNumba < loadedMods.Count)
             {
-                Debug.LogError($"[GorillaStats]: Error updating watch text: {e}, unity I will do bad things to you");
+                loadedMods[CurrentModNumba].Forever();
+                watchText.text = loadedMods[CurrentModNumba].TextToDisplay;
             }
-
         }
-
-        private string GetFPSColor(float fps)
+        
+        private void LoadDaMods()
         {
-            if (fps >= 110f) return "green";
-            if (fps >= 50f) return "yellow";
-            return "red";
-        }
+            var baseType = typeof(GorillaStatsPlugin);
+            var modTypes = Assembly.GetExecutingAssembly()
+                .GetTypes()
+                .Where(t => t.IsClass && !t.IsAbstract && t != baseType && baseType.IsAssignableFrom(t));
 
-        private string GetPingColor(string pingString)
-        {
-            if (float.TryParse(pingString, out float ping))
+            foreach (var type in modTypes)
             {
-                if (ping <= 50f) return "green";
-                if (ping <= 100f) return "yellow";
-                return "red";
-            }
-            else
-            {
-                return "white";
+                if (Activator.CreateInstance(type) is GorillaStatsPlugin mod)
+                {
+                    loadedMods.Add(mod);
+                }
             }
         }
 
-        private void OnGUI()
-        {
-            GUI.Box(new Rect(10, 10, 100, 200), "==GorillaStats==");
-            GUI.Label(new Rect(10, 30, 100, 20), "PING: " + ping);
-            GUI.Label(new Rect(10, 50, 100, 20), "PLAYERS: " + playerCount);
-            GUI.Label(new Rect(10, 70, 100, 20), "TIME: " + DateTime.Now.ToString("HH:mm"));
-            GUI.Label(new Rect(10, 90, 100, 20), $"FPS: {Mathf.Round(1f / deltaTime)}");
-            GUI.Label(new Rect(10, 110, 100, 20), $"SPEED: {playerSpeed:F2}");
-        }
 
         public AssetBundle LoadAssetBundle(string path)
         {

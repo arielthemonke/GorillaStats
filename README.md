@@ -1,5 +1,6 @@
 # GorillaStats
-A Gorilla Tag mod that shows useful information on a watch!
+A Gorilla Tag mod that shows useful information on a watch!<br/>
+[Join my discord!](https://discord.gg/4QQuYJu46e)<br/>
 [![Github All Releases](https://img.shields.io/github/downloads/arielthemonke/GorillaStats/total.svg)]()
 
 ![Picture of the watch i think](watch/Watch.png)

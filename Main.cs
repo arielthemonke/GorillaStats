@@ -5,9 +5,9 @@ using UnityEngine;
 using TMPro;
 using Photon.Pun;
 using System;
-using OculusSampleFramework;
-using UnityEngine.UIElements;
-using UnityEngine.Animations.Rigging;
+using System.Linq;
+using BepInEx.Configuration;
+using UnityEngine.InputSystem;
 
 namespace GorillaStats
 {
@@ -16,26 +16,56 @@ namespace GorillaStats
     {
         public static AssetBundle bundle;
         public GameObject Watch;
+        public GameObject Cube;
+        public GameObject Screen;
+        public GameObject Cylinder;
         public TextMeshPro watchText;
 
         private float deltaTime;
-        public static string ping;
+        public string ping;
+        public float fps;
 
         private Vector3 lastPosition;
-        private float playerSpeed;
+        public float playerSpeed;
 
-        private int playerCount;
+        public int playerCount;
 
-        void Start()
+        private ConfigFile cfg = new ConfigFile(Path.Combine(Paths.ConfigPath, "GorillaStats.cfg"), true);
+        private ConfigEntry<string> watchColour;
+        private ConfigEntry<string> screenColour;
+        private bool wasPressed;
+
+        private int currentPageIndex = 0;
+
+        public event Action OnWatchSpawned;
+
+        public static Main instance;
+        
+        private GameObject notifManager;
+        private GameObject Networking;
+
+        void Awake()
         {
+            instance = this;
             GorillaTagger.OnPlayerSpawned(Init);
+            watchColour = cfg.Bind("Colours","Cube Colour", "#FFFFFF", "Watch colour hex code");
+            screenColour = cfg.Bind("Colours", "Screen Color", "#00631b", "Colour of the watch's screen in hex");
         }
 
         void Init()
         {
             bundle = LoadAssetBundle("GorillaStats.watch.watch"); // Why did I make this the path lol
             Watch = Instantiate(bundle.LoadAsset<GameObject>("Watch"));
-
+            
+            Cube = Watch.transform.GetChild(0).gameObject;
+            Screen = Watch.transform.GetChild(1).gameObject;
+            Cylinder = Watch.transform.GetChild(2).gameObject;
+            Cube.GetComponent<MeshRenderer>().material.shader = Shader.Find("GorillaTag/UberShader");
+            Cube.GetComponent<MeshRenderer>().material.color = colourFromString(watchColour.Value, Color.white);
+            Screen.GetComponent<MeshRenderer>().material.shader = Shader.Find("GorillaTag/UberShader");
+            Screen.GetComponent<MeshRenderer>().material.color = colourFromString(screenColour.Value, colourFromString("#00631b", Color.black));
+            Cylinder.GetComponent<MeshRenderer>().material.shader = Shader.Find("GorillaTag/UberShader");
+            Cylinder.GetComponent<MeshRenderer>().material.color = colourFromString(watchColour.Value, Color.white);
             Watch.transform.SetParent(GorillaLocomotion.GTPlayer.Instance.rightControllerTransform.transform);
             Watch.transform.localPosition = new Vector3(-0.03f, 0f, -0.07f);
             Watch.transform.localRotation = Quaternion.Euler(325f, 0f, 90f);
@@ -43,54 +73,92 @@ namespace GorillaStats
 
             watchText = Watch.GetComponentInChildren<TextMeshPro>();
             watchText.font = GorillaTagger.Instance.offlineVRRig.playerText1.font; // thanks hansolo1000falcon!
-            watchText.text = "Loading..."; 
+            watchText.text = "Loading...";
+            
 
             lastPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
+            
+            
+            GorillaStatsPageManager.RegisterPage(new BasePage());
+
+            notifManager = new GameObject("GorillaStatsNotifManager");
+            notifManager.AddComponent<NotifLib>();
+            
+            Networking = new GameObject("GorillaStatsNetworking");
+            Networking.AddComponent<Networking>();
+            
+            OnWatchSpawned?.Invoke();
+            
+            AddProps();
+        }
+
+        void AddProps()
+        {
+            var pageNames = GorillaStatsPageManager.GorillaStatsPages.Select(p => p.PageName).ToArray();
+            
+            string allPPages = string.Join(", ", pageNames);
+            
+            
+            ExitGames.Client.Photon.Hashtable hash = new ExitGames.Client.Photon.Hashtable();
+            hash.Add("GorillaStats", allPPages);
+            PhotonNetwork.LocalPlayer.SetCustomProperties(hash);
         }
 
         void Update()
         {
+            if (NotifLib.shouldReturn) return;
             if (Watch == null || watchText == null) return;
 
-            if (PhotonNetwork.InRoom)
+            if (ControllerInputPoller.instance.rightControllerSecondaryButton && !wasPressed || Keyboard.current.nKey.wasPressedThisFrame)
             {
-                ping = PhotonNetwork.GetPing().ToString();
-                playerCount = PhotonNetwork.CurrentRoom.PlayerCount;
+                currentPageIndex++;
+                if (currentPageIndex >= GorillaStatsPageManager.GorillaStatsPages.Count)
+                {
+                    currentPageIndex = 0;
+                }
             }
-            else
-            {
-                ping = "N/A";
-                playerCount = 0;
-            }
-
-            deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
-            float fps = 1.0f / deltaTime;
-
-            Vector3 currentPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
-            playerSpeed = Vector3.Distance(currentPosition, lastPosition) / Time.deltaTime;
-            lastPosition = currentPosition;
-            
             try
             {
-                string fpsColor = GetFPSColor(fps);
-                string pingColor = GetPingColor(ping);
-                watchText.text = $"<color={fpsColor}>FPS: {Mathf.Round(fps)}</color>\n" + $"<color={pingColor}>PING: {ping}</color>\n" + $"<color=white>SPEED: {playerSpeed:F2}</color>\n" + $"<color=white>TIME: {DateTime.Now:HH:mm:ss}</color>\n" + $"<color=white>PLAYERS: {playerCount}</color>";
+                if (GorillaStatsPageManager.GorillaStatsPages.Count > 0)
+                {
+                    var page = GorillaStatsPageManager.GorillaStatsPages[currentPageIndex];
+                    watchText.text = page.GetPageText();
+                }
+                
+                if (PhotonNetwork.InRoom)
+                {
+                    ping = PhotonNetwork.GetPing().ToString();
+                    playerCount = PhotonNetwork.CurrentRoom.PlayerCount;
+                }
+                else
+                {
+                    ping = "N/A";
+                    playerCount = 0;
+                }
+
+                deltaTime += (Time.unscaledDeltaTime - deltaTime) * 0.1f;
+                fps = 1.0f / deltaTime;
+
+                Vector3 currentPosition = GorillaLocomotion.GTPlayer.Instance.bodyCollider.transform.position;
+                playerSpeed = Vector3.Distance(currentPosition, lastPosition) / Time.deltaTime;
+                lastPosition = currentPosition;
             }
             catch (Exception e)
             {
-                Debug.LogError($"[GorillaStats]: Error updating watch text: {e}, unity I will do bad things to you");
+                Debug.LogError(e.Message);
             }
-
+            
+            wasPressed = ControllerInputPoller.instance.rightControllerSecondaryButton;
         }
 
-        private string GetFPSColor(float fps)
+        public string GetFPSColor(float fps)
         {
             if (fps >= 110f) return "green";
             if (fps >= 50f) return "yellow";
             return "red";
         }
 
-        private string GetPingColor(string pingString)
+        public string GetPingColor(string pingString)
         {
             if (float.TryParse(pingString, out float ping))
             {
@@ -104,15 +172,28 @@ namespace GorillaStats
             }
         }
 
+        private Rect statsWindow = new Rect(100, 100, 100, 160);
+
         private void OnGUI()
         {
-            GUI.Box(new Rect(10, 10, 100, 200), "==GorillaStats==");
-            GUI.Label(new Rect(10, 30, 100, 20), "PING: " + ping);
-            GUI.Label(new Rect(10, 50, 100, 20), "PLAYERS: " + playerCount);
-            GUI.Label(new Rect(10, 70, 100, 20), "TIME: " + DateTime.Now.ToString("HH:mm"));
-            GUI.Label(new Rect(10, 90, 100, 20), $"FPS: {Mathf.Round(1f / deltaTime)}");
-            GUI.Label(new Rect(10, 110, 100, 20), $"SPEED: {playerSpeed:F2}");
+            statsWindow = GUI.Window(100, statsWindow, DrawStatsWindow, "==GorillaStats==");
         }
+
+        private void DrawStatsWindow(int windowID)
+        {
+            GUILayout.BeginVertical();
+
+            GUILayout.Label($"PING: {ping}");
+            GUILayout.Label($"PLAYERS: {playerCount}");
+            GUILayout.Label($"TIME: {DateTime.Now:HH:mm}");
+            GUILayout.Label($"FPS: {Mathf.RoundToInt(1f / deltaTime)}");
+            GUILayout.Label($"SPEED: {playerSpeed:F2}");
+
+            GUILayout.EndVertical();
+
+            GUI.DragWindow();
+        }
+
 
         public AssetBundle LoadAssetBundle(string path)
         {
@@ -120,6 +201,15 @@ namespace GorillaStats
             AssetBundle bundle = AssetBundle.LoadFromStream(stream);
             stream.Close();
             return bundle;
+        }
+
+        Color colourFromString(string colour, Color fallback)
+        {
+            if (ColorUtility.TryParseHtmlString(colour, out Color colourResult))
+            {
+                return colourResult;
+            }
+            return fallback;
         }
     }
 }

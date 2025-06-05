@@ -25,7 +25,6 @@ namespace GorillaStats
                     {
                         if (vrrig == null)
                         {
-                            Debug.Log("the rig is null");
                             continue;
                         }
                         if (vrrig.isLocal) continue;
